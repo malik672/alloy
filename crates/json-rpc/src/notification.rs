@@ -1,4 +1,3 @@
-
 use crate::{Response, ResponsePayload};
 use alloy_primitives::U256;
 use serde::{
@@ -58,43 +57,22 @@ impl<'de> Deserialize<'de> for PubSubItem {
                 // Drain the map into the appropriate fields.
                 while let Ok(Some(key)) = map.next_key() {
                     match key {
-                        ID => {
-                            if id.is_some() {
-                                return Err(serde::de::Error::duplicate_field(ID));
-                            }
-                            id = Some(map.next_value()?);
-                        }
+                        ID => assign_field(&mut id, map.next_value()?, ID)?,
                         SUBSCRIPTION => {
-                            if subscription.is_some() {
-                                return Err(serde::de::Error::duplicate_field(SUBSCRIPTION));
-                            }
-                            subscription = Some(map.next_value()?);
+                            assign_field(&mut subscription, map.next_value()?, SUBSCRIPTION)?
                         }
-                        RESULT => {
-                            if result.is_some() {
-                                return Err(serde::de::Error::duplicate_field(RESULT));
-                            }
-                            result = Some(map.next_value()?);
-                        }
-                        ERROR => {
-                            if error.is_some() {
-                                return Err(serde::de::Error::duplicate_field(ERROR));
-                            }
-                            error = Some(map.next_value()?);
-                        }
-                        // Discard unknown fields.
-                        _ => {
-                            let _ = map.next_value::<serde_json::Value>()?;
-                        }
+                        RESULT => assign_field(&mut result, map.next_value()?, RESULT)?,
+                        ERROR => assign_field(&mut error, map.next_value()?, ERROR)?,
                     }
                 }
 
                 // If it has an ID, it is a response.
                 if let Some(id) = id {
                     if subscription.is_some() {
-                        return Err(serde::de::Error::custom(
-                            format!("unexpected {} in pubsub item", SUBSCRIPTION),
-                        ));
+                        return Err(serde::de::Error::custom(format!(
+                            "unexpected {} in pubsub item",
+                            SUBSCRIPTION
+                        )));
                     }
                     // We need to differentiate error vs result here.
                     let payload = if let Some(error) = error {
@@ -102,17 +80,19 @@ impl<'de> Deserialize<'de> for PubSubItem {
                     } else if let Some(result) = result {
                         ResponsePayload::Success(result)
                     } else {
-                        return Err(serde::de::Error::custom(
-                            format!( "missing `{}` or `{}` field in response", RESULT, ERROR),
-                        ));
+                        return Err(serde::de::Error::custom(format!(
+                            "missing `{}` or `{}` field in response",
+                            RESULT, ERROR
+                        )));
                     };
                     Ok(PubSubItem::Response(Response { id, payload }))
                 } else {
                     // Notifications cannot have an error.
                     if error.is_some() {
-                        return Err(serde::de::Error::custom(
-                           format!( "unexpected `{}` field in {} notification", ERROR, SUBSCRIPTION),
-                        ));
+                        return Err(serde::de::Error::custom(format!(
+                            "unexpected `{}` field in {} notification",
+                            ERROR, SUBSCRIPTION
+                        )));
                     }
                     // Notifications must have a subscription and a result.
                     if subscription.is_none() {
@@ -127,6 +107,19 @@ impl<'de> Deserialize<'de> for PubSubItem {
                         result: result.unwrap(),
                     }))
                 }
+            }
+        }
+
+        fn assign_field<T>(
+            field: &mut Option<T>,
+            value: T,
+            field_name: &str,
+        ) -> Result<(), A::Error> {
+            if field.is_some() {
+                Err(serde::de::Error::duplicate_field(field_name))
+            } else {
+                *field = Some(value);
+                Ok(())
             }
         }
 
