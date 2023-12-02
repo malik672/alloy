@@ -4,7 +4,6 @@ use serde_json::value::RawValue;
 use std::hash::Hash;
 use tokio::sync::broadcast;
 
-#[derive(Clone)]
 /// An active subscription.
 pub(crate) struct ActiveSubscription {
     /// Cached hash of the request, used for sorting and equality.

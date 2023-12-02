@@ -57,12 +57,34 @@ impl<'de> Deserialize<'de> for PubSubItem {
                 // Drain the map into the appropriate fields.
                 while let Ok(Some(key)) = map.next_key() {
                     match key {
-                        ID => assign_field(&mut id, map.next_value()?, ID)?,
-                        SUBSCRIPTION => {
-                            assign_field(&mut subscription, map.next_value()?, SUBSCRIPTION)?
+                        ID => {
+                            if id.is_some() {
+                                return Err(serde::de::Error::duplicate_field(ID));
+                            }
+                            id = Some(map.next_value()?);
                         }
-                        RESULT => assign_field(&mut result, map.next_value()?, RESULT)?,
-                        ERROR => assign_field(&mut error, map.next_value()?, ERROR)?,
+                        SUBSCRIPTION => {
+                            if subscription.is_some() {
+                                return Err(serde::de::Error::duplicate_field(SUBSCRIPTION));
+                            }
+                            subscription = Some(map.next_value()?);
+                        }
+                        RESULT => {
+                            if result.is_some() {
+                                return Err(serde::de::Error::duplicate_field(RESULT));
+                            }
+                            result = Some(map.next_value()?);
+                        }
+                        ERROR => {
+                            if error.is_some() {
+                                return Err(serde::de::Error::duplicate_field(ERROR));
+                            }
+                            error = Some(map.next_value()?);
+                        }
+                        // Discard unknown fields.
+                        _ => {
+                            let _ = map.next_value::<serde_json::Value>()?;
+                        }
                     }
                 }
 
@@ -107,19 +129,6 @@ impl<'de> Deserialize<'de> for PubSubItem {
                         result: result.unwrap(),
                     }))
                 }
-            }
-        }
-
-        fn assign_field<T>(
-            field: &mut Option<T>,
-            value: T,
-            field_name: &str,
-        ) -> Result<(), A::Error> {
-            if field.is_some() {
-                Err(serde::de::Error::duplicate_field(field_name))
-            } else {
-                *field = Some(value);
-                Ok(())
             }
         }
 
